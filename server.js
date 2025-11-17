@@ -6,7 +6,6 @@ const app = express();
 const WebSocket = require("ws");
 const wss = new WebSocket.Server({ port: process.env.WS_SERVER_PORT });
 
-//awesome
 app.use(express.static(path.join(__dirname, "public")));
 app.use(bodyParser.json());
 app.use(express.json());
@@ -23,6 +22,8 @@ const sendCommand = (cmd) => {
 };
 
 wss.on("connection", (ws) => {
+  if (birdbox) return; // only one birdbox connection
+
   console.log("client connected");
   birdbox = ws;
 

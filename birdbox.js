@@ -38,7 +38,7 @@ const connect = () => {
               mpvProcess = spawn("mpv", [
                 "--fs",
                 "--vo=drm",
-                `videos/${cmd.video}`,
+                `videos/${cmd.video}.mp4`,
               ]);
             }
           }

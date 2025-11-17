@@ -97,13 +97,10 @@
         async mounted() {
           const res = await fetch("/api/videos");
           this.videos = await res.json();
-          console.log(this.videos);
         },
       }).mount("#app");
 
       const playVideo = async (video) => {
-        // post to server to relay ws command
-        console.log("start", video);
         await fetch("/api/command", {
           method: "POST",
           headers: {
