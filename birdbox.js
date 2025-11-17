@@ -1,3 +1,4 @@
+require("dotenv").config({ path: ".env" });
 const { spawn } = require("child_process");
 const WebSocket = require("ws");
 
@@ -5,9 +6,7 @@ let mpvProcess = null;
 let reconnectTimer = null;
 
 const connect = () => {
-  const ws = new WebSocket(
-    `ws://${process.env.SERVER_ADDRESS}:${process.env.WS_SERVER_PORT}`
-  );
+  const ws = new WebSocket(process.env.SERVER_ADDRESS);
 
   ws.on("open", () => {
     console.log("connected to server");

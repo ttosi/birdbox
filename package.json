@@ -4,10 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "server": "nodemon --env-file-if-exists=.env server.js",
-    "birdbox": "nodemon --env-file-if-exists=.env birdbox.js",
-    "web": "live-server public/",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "server": "nodemon server.js",
+    "birdbox": "nodemon birdbox.js",
+    "web": "live-server public/"
   },
   "repository": {
     "type": "git",
@@ -21,6 +20,7 @@
   "homepage": "https://github.com/ttosi/birdbox#readme",
   "dependencies": {
     "bash-color": "^0.0.4",
+    "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "nodemon": "^3.1.11",
     "sqlite3": "^5.1.7",

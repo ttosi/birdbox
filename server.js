@@ -1,3 +1,4 @@
+require("dotenv").config({ path: ".env" });
 const fs = require("fs");
 const path = require("path");
 const express = require("express");
@@ -22,7 +23,10 @@ const sendCommand = (cmd) => {
 };
 
 wss.on("connection", (ws) => {
-  if (birdbox) return; // only one birdbox connection
+  if (birdbox) {
+    console.warn("birdbox is already registered");
+    return;
+  }
 
   console.log("client connected");
   birdbox = ws;
