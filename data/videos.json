@@ -58,5 +58,11 @@
     "filename": "Tuqcr0qZ8HE_05-44-31",
     "duration": "00:10:00",
     "isPlaying": false
+  },
+  {
+    "name": "Test Video - 1 Minute",
+    "filename": "one_minute",
+    "duration": "00:01:00",
+    "isPlaying": false
   }
 ]
