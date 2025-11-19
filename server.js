@@ -1,8 +1,4 @@
-const original = console.log;
-console.log = () => {}; // this is so stupid, only way to suppress dotenv injecting console output
 require("dotenv").config({ debug: false });
-console.log = original;
-
 const fs = require("fs");
 const path = require("path");
 const express = require("express");
@@ -10,11 +6,8 @@ const bodyParser = require("body-parser");
 const WebSocket = require("ws");
 const logger = require("./logger");
 
-// TODO Must track and communicate videos state
-// TODO for all connected clients on change
-
 // -------------------------
-// Express + WebSocket Setup
+// Express Setup
 // -------------------------
 const app = express();
 app.use(express.static(path.join(__dirname, "public")));
@@ -22,28 +15,9 @@ app.use(bodyParser.json());
 app.use(express.json());
 
 // -------------------------
-// Send Message
-// -------------------------
-const sendBirdboxMessage = (msg) => {
-  if (!birdbox || birdbox.readyState !== WebSocket.OPEN) {
-    logger.warn("Birdbox not connected");
-    return;
-  }
-
-  try {
-    birdbox.send(JSON.stringify(msg));
-    logger.info(`Message sent [${msg.type}, ${msg.action}]`);
-  } catch (err) {
-    logger.error(`Failed to send message: ${err.message}`);
-  }
-};
-
-const broadcastMessage = (msg) => {};
-
-// -------------------------
 // WebSocket Server
 // -------------------------
-let birdbox = null;
+let birdbox = undefined;
 let clients = [];
 
 const videoState = JSON.parse(
@@ -58,9 +32,9 @@ wss.on("connection", (ws) => {
   ws.on("message", (msg) => {
     msg = JSON.parse(msg);
 
-    // Incoming ws connection; valid client types are
-    // birdbox or browser. There can only be 1 birdbox
-    // connection and 1 or more browser connections
+    // -------------------------
+    // Handle Client Connections
+    // -------------------------
     if (msg.type === "connection") {
       switch (msg.clientType) {
         case "birdbox":
@@ -73,37 +47,38 @@ wss.on("connection", (ws) => {
           logger.info("Birdbox connected");
           break;
         case "browser":
+          ws.clientId = msg.clientId;
           clients.push(ws);
-          logger.info(`Client connected (clients: ${clients.length})`);
+          logger.info(`Client connected (client count: ${clients.length})`);
           break;
         default:
           logger.warn("Invalid connection attempt");
       }
     }
 
-    // recieved command from browser client
+    // -------------------------
+    // Handle Broswer Commands
+    // -------------------------
     if (msg.type === "command" && msg.clientType === "browser") {
-    }
+      // send command to birdbox
+      birdbox.send(JSON.stringify(msg));
 
-    // recieved command from birdbox
-    if (msg.type === "command" && msg.clientType === "birdbox") {
-      switch (msg.action) {
-        case "notify-start":
-          clients.forEach((client) => {
-            if (client !== ws) {
-              console.log(ws);
-              console.log(msg);
-              // client.send(JSON.stringify({
+      // notify all clients of state change
+      clients.forEach((c) => {
+        if (c.clientId !== ws.clientId) {
+          c.send(
+            JSON.stringify({
+              id: msg.id,
+              type: "notify",
+              action: msg.action,
+            })
+          );
+        }
+      });
 
-              // }));
-            }
-          });
-          break;
-        case "notify-stop":
-          break;
-        default:
-          logger.warn("Invalid message from birdbox");
-      }
+      // update local videoState
+      videoState.find((v) => v.id === msg.id).isPlaying =
+        msg.action === "start";
     }
   });
 
@@ -112,22 +87,22 @@ wss.on("connection", (ws) => {
   });
 
   ws.on("close", () => {
-    if (birdbox === ws) {
-      birdbox = null;
+    if (ws === birdbox) {
+      birdbox = undefined;
       logger.info("Birdbox disconnected");
     } else {
       clients = clients.filter((c) => c !== ws);
-      logger.info(`Client disconnected (clients: ${clients.length})`);
+      logger.info(`Client disconnected (client count: ${clients.length})`);
     }
   });
 });
 
 // -------------------------
-// Express Routes
+// Routes
 // -------------------------
 app.get("/api/videos", (req, res) => {
   try {
-    // send the current video state to new browser client
+    // send the current video state
     res.send(videoState);
   } catch (err) {
     logger.error(`Failed to send video data: ${err.message}`);
@@ -135,22 +110,11 @@ app.get("/api/videos", (req, res) => {
   }
 });
 
-// TODO replace with ws message
-app.post("/api/command", (req, res) => {
-  sendBirdboxMessage(req.body);
-  res.sendStatus(204);
-});
-
 app.get("/api/config", (req, res) => {
   res.json({
     SERVER_ADDRESS: process.env.SERVER_ADDRESS,
   });
 });
-
-const findVideo = (id) => {
-  // for now, the filename is the video id
-  return videoState.filter((v) => (v.id = id));
-};
 
 // -------------------------
 // Start Server

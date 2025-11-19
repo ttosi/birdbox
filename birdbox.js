@@ -1,10 +1,10 @@
-require("dotenv").config({ path: ".env" });
+require("dotenv").config({ debug: false });
 const { spawn } = require("child_process");
 const WebSocket = require("ws");
 const logger = require("./logger");
 
-let mpvProcess = null;
-let reconnectTimer = null;
+let mpvProcess = undefined;
+let reconnectTimer = undefined;
 
 const connect = () => {
   const ws = new WebSocket(process.env.SERVER_ADDRESS);
@@ -21,14 +21,17 @@ const connect = () => {
       })
     );
 
-    // clear the reconnection interval as soon as
-    // connection is made to server
+    // clear reconnection timer once connection
+    // is reestablished
     if (reconnectTimer) {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
     }
   });
 
+  // -------------------------
+  // Handle Commands
+  // -------------------------
   ws.on("message", (msg) => {
     msg = JSON.parse(msg.toString());
 
@@ -62,27 +65,10 @@ const connect = () => {
                 ];
 
           mpvProcess = spawn("mpv", args);
-          sendMessage({ id: msg.id, action: "notify-start" });
-          // ws.send(
-          //   JSON.stringify({
-          //     type: "command",
-          //     action: "notify-video-started",
-          //     id: msg.id,
-          //   })
-          // );
           logger.info(`Starting video: ${filepath}`);
 
           mpvProcess.on("exit", (code, signal) => {
             mpvProcess = null;
-
-            // ws.send(
-            //   JSON.stringify({
-            //     type: "command",
-            //     action: "notify-video-stopped",
-            //     video: msg.video,
-            //   })
-            // );
-
             logger.info(`mpv exited (code=${code}, signal=${signal})`);
           });
 
@@ -124,23 +110,9 @@ const connect = () => {
     }
     ws.close();
   });
-
-  const sendMessage = (msg) => {
-    console.log(ws);
-    console.log(msg);
-    ws.send(
-      JSON.stringify({
-        ...msg,
-        type: "command",
-        clientType: "birdbox",
-        clientID: crypto.randomUUID(),
-      })
-    );
-  };
 };
 
-// connection to server lost, start an internal
-// to attempt recconnection.
+// start interval for connection reattempts
 const scheduleReconnect = () => {
   if (reconnectTimer) return;
   reconnectTimer = setTimeout(connect, 5000);

@@ -16,7 +16,7 @@
       <div id="videos" v-for="video in videos" :key="video.name">
         <article>
           <header><strong>{{ video.name }}</strong></header>
-          <div v-if="!video.isPlaying" @click="play(video)">
+          <div v-if="!video.isPlaying" @click="start(video)">
             <div class="thumbnail-wrapper">
               <img :src="`/thumbnails/${video.id}.png`" />
               <div class="control-icon">
@@ -43,8 +43,9 @@
               <div v-if="!video.isPlaying">
                 <small>Duration {{ video.duration }}</small>
               </div>
+              <!--fix this only one v-if-->
               <div v-if="video.isPlaying">
-                <small>Playing {{ video.time }}</small>
+                <small>Playing</small>
               </div>
               <div v-if="video.isPlaying">
                 <button>View Live Stream</button>
@@ -58,82 +59,80 @@
     <script>
       const { createApp } = Vue;
 
-      // TODO communicate all video control commands via ws
-      // TODO the only api calls sould be for /api/config
-      // TODO and /api/videos that loads initial video state
       createApp({
         data() {
           return {
             videos: [],
-            ws: null,
-            clientId: null,
+            ws: undefined,
+            clientId: undefined,
           };
         },
         methods: {
           connect() {
-            // open connection to ws server and register
-            // as browser client type
+            // open connection to ws server and
             this.clientId = crypto.randomUUID();
             this.ws.onopen = () => {
+              // register as a browser
               this.ws.send(
                 JSON.stringify({
                   type: "connection",
                   clientType: "browser",
-                  clientd: this.clientId,
+                  clientId: this.clientId,
                 })
               );
 
-              // test recieve msg
+              // receive ws messages from server
               this.ws.onmessage = (event) => {
-                console.log(event.data);
+                const msg = JSON.parse(event.data);
+                console.log(msg);
+                this.videos.find((v) => v.id === msg.id).isPlaying =
+                  msg.action === "start";
               };
             };
           },
-          play(video) {
-            // find currently playing video, if any, and stop it
-            const currentlyPlaying = this.videos.find((v) => v.isPlaying);
-            if (currentlyPlaying) {
-              this.stop(currentlyPlaying); // send ws stop message
+          start(video) {
+            // if video playing
+            const playing = this.videos.find((v) => v.isPlaying);
+            if (playing) {
+              this.stop(playing); // send ws stop message
             }
 
-            playVideo(video); // change to ws call
+            // playVideo(video); // change to ws call
+
+            this.sendMessage({
+              id: video.id,
+              type: "command",
+              action: "start",
+            });
 
             video.isPlaying = true;
-            video.time = "00:00:00";
-            video.seconds = 0;
-            video.interval = setInterval(() => {
-              video.seconds += 1;
-              video.time = formatSeconds(video.seconds);
-            }, 1000);
           },
           stop(video) {
             // stopVideo(video); // change to ws call (sendMessage(video))
-            video.isPlaying = false;
-            video.time = "00:00:00";
-            video.seconds = 0;
-            clearInterval(video.interval ?? 0);
 
             // send stop command to server so it can
             // update all the client's video state
-            sendMessage({
+            this.sendMessage({
               id: video.id,
               type: "command",
-              command: "stop",
+              action: "stop",
             });
-            // this.resetVideo(video);
+
+            video.isPlaying = false;
           },
-          // resetVideo(video) {
-          //   video.isPlaying = false;
-          //   video.time = "00:00:00";
-          //   video.seconds = 0;
-          //   clearInterval(video.interval ?? 0);
-          // },
           sendMessage(msg) {
-            this.ws.send(JSON.stringify({ ...msg, clientId: this.clientId }));
+            this.ws.send(
+              JSON.stringify({
+                ...msg,
+                clientType: "browser",
+                clientId: this.clientId,
+              })
+            );
           },
         },
         async mounted() {
-          // get ws config from server
+          // get ws config from server (REST)
+          // TODO refactor both calls as await
           fetch("/api/config")
             .then((res) => res.json())
             .then(async (config) => {
@@ -177,8 +176,6 @@
           }),
         });
       };
-
-      const sendMessage = () => {};
 
       const post = () => {};
 
