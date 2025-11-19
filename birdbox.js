@@ -1,46 +1,10 @@
 require("dotenv").config({ path: ".env" });
 const { spawn } = require("child_process");
 const WebSocket = require("ws");
+const logger = require("./logger");
 
-// -------------------------
-// Logger (same setup as server.js)
-// -------------------------
-const { createLogger, format, transports } = require("winston");
-
-const logger = createLogger({
-  level: "info",
-  format: format.combine(
-    format.timestamp(),
-    format.printf(({ timestamp, level, message }) => {
-      return `${timestamp} ${level}: ${message}`;
-    })
-  ),
-  transports: [new transports.Console()],
-});
-
-// Color logs in development
-if (process.env.NODE_ENV !== "production") {
-  logger.format = format.combine(
-    format.colorize(),
-    format.timestamp(),
-    format.printf(({ timestamp, level, message }) => {
-      return `${timestamp} ${level}: ${message}`;
-    })
-  );
-}
-
-process.on("uncaughtException", (err) => {
-  logger.error(`Uncaught Exception: ${err.stack || err.message}`);
-});
-
-process.on("unhandledRejection", (err) => {
-  logger.error(`Unhandled Rejection: ${err.stack || err}`);
-});
-
-// -------------------------
 let mpvProcess = null;
 let reconnectTimer = null;
-// -------------------------
 
 const connect = () => {
   const ws = new WebSocket(process.env.SERVER_ADDRESS);
@@ -48,63 +12,78 @@ const connect = () => {
   ws.on("open", () => {
     logger.info("Connected to server");
 
+    // register as a birdbox client
+    ws.send(
+      JSON.stringify({
+        type: "connection",
+        clientType: "birdbox",
+        clientID: crypto.randomUUID(),
+      })
+    );
+
+    // clear the reconnection interval as soon as
+    // connection is made to server
     if (reconnectTimer) {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
     }
   });
 
-  ws.on("message", (data) => {
-    let cmd;
-    try {
-      cmd = JSON.parse(data.toString());
-    } catch (err) {
-      logger.error(`Invalid JSON from server: ${err.message}`);
+  ws.on("message", (msg) => {
+    msg = JSON.parse(msg.toString());
+
+    if (msg.type !== "command") {
+      logger.warn(`Unknown message type received: ${msg.type}`);
       return;
     }
 
-    if (cmd.type !== "command") {
-      logger.warn(`Unknown message type received: ${cmd.type}`);
-      return;
-    }
+    logger.info(`Command received [${msg.type}, ${msg.action}]`);
 
-    logger.info(`Command received - type: ${cmd.type}, action: ${cmd.action}`);
-
-    switch (cmd.action) {
+    switch (msg.action) {
       case "start":
         // Kill existing video
         if (mpvProcess) {
-          try {
-            mpvProcess.kill();
-            logger.info("Existing video process killed");
-          } catch (err) {
-            logger.error(`Failed to kill mpv process: ${err.message}`);
-          }
+          mpvProcess.kill();
           mpvProcess = null;
         }
 
         // Start new video
         try {
-          const filepath = `videos/${cmd.video}.mp4`;
+          const filepath = `videos/${msg.id}.mp4`;
           const args =
             process.env.ENVIRONMENT !== "prod"
               ? [filepath]
               : [
                   "--no-terminal",
-                  "--log-file=/tmp/mpv.log",
                   "--vo=gpu",
                   "--hwdec=auto",
                   "--really-quiet",
                   filepath,
                 ];
 
+          mpvProcess = spawn("mpv", args);
+          sendMessage({ id: msg.id, action: "notify-start" });
+          // ws.send(
+          //   JSON.stringify({
+          //     type: "command",
+          //     action: "notify-video-started",
+          //     id: msg.id,
+          //   })
+          // );
           logger.info(`Starting video: ${filepath}`);
 
-          mpvProcess = spawn("mpv", args);
-
           mpvProcess.on("exit", (code, signal) => {
-            logger.info(`mpv exited (code=${code}, signal=${signal})`);
             mpvProcess = null;
+
+            // ws.send(
+            //   JSON.stringify({
+            //     type: "command",
+            //     action: "notify-video-stopped",
+            //     video: msg.video,
+            //   })
+            // );
+
+            logger.info(`mpv exited (code=${code}, signal=${signal})`);
           });
 
           mpvProcess.on("error", (err) => {
@@ -128,27 +107,43 @@ const connect = () => {
         break;
 
       default:
-        logger.warn(`Invalid command received: ${cmd.action}`);
+        logger.warn(`Invalid command received: ${msg.action}`);
     }
   });
 
   ws.on("close", () => {
-    logger.warn("Server connection lost, retrying in 30s...");
+    logger.warn("Attempting to reconnect, retrying in 5s...");
     scheduleReconnect();
   });
 
   ws.on("error", (err) => {
-    logger.error(`WebSocket error: ${err.message}`);
+    if (err.code === "ECONNREFUSED") {
+      logger.error("Server connection lost");
+    } else {
+      logger.error(`WebSocket error: ${err.message}`);
+    }
     ws.close();
   });
+
+  const sendMessage = (msg) => {
+    console.log(ws);
+    console.log(msg);
+    ws.send(
+      JSON.stringify({
+        ...msg,
+        type: "command",
+        clientType: "birdbox",
+        clientID: crypto.randomUUID(),
+      })
+    );
+  };
 };
 
+// connection to server lost, start an internal
+// to attempt recconnection.
 const scheduleReconnect = () => {
   if (reconnectTimer) return;
-  reconnectTimer = setTimeout(connect, 30000);
+  reconnectTimer = setTimeout(connect, 5000);
 };
 
 connect();
-
-// Prevent process from exiting
-setInterval(() => {}, 1 << 30);

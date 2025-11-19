@@ -1,43 +1,17 @@
-require("dotenv").config({ path: ".env" });
+const original = console.log;
+console.log = () => {}; // this is so stupid, only way to suppress dotenv injecting console output
+require("dotenv").config({ debug: false });
+console.log = original;
+
 const fs = require("fs");
 const path = require("path");
 const express = require("express");
 const bodyParser = require("body-parser");
 const WebSocket = require("ws");
+const logger = require("./logger");
 
-// -------------------------
-// Logger
-// -------------------------
-const { createLogger, format, transports } = require("winston");
-
-const logger = createLogger({
-  level: "info",
-  format: format.combine(
-    format.timestamp(),
-    format.printf(({ timestamp, level, message }) => {
-      return `${timestamp} ${level}: ${message}`;
-    })
-  ),
-  transports: [new transports.Console()],
-});
-
-// Dev: colorize output
-if (process.env.NODE_ENV !== "production") {
-  logger.format = format.combine(
-    format.colorize(),
-    format.timestamp(),
-    format.printf(({ timestamp, level, message }) => {
-      return `${timestamp} ${level}: ${message}`;
-    })
-  );
-}
-
-process.on("uncaughtException", (err) => {
-  logger.error(`Uncaught Exception: ${err.stack || err.message}`);
-});
-process.on("unhandledRejection", (err) => {
-  logger.error(`Unhandled Rejection: ${err.stack || err}`);
-});
+// TODO Must track and communicate videos state
+// TODO for all connected clients on change
 
 // -------------------------
 // Express + WebSocket Setup
@@ -47,70 +21,136 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use(bodyParser.json());
 app.use(express.json());
 
-let birdbox = null;
-
 // -------------------------
-// Helper: Send Command
+// Send Message
 // -------------------------
-const sendCommand = (cmd) => {
+const sendBirdboxMessage = (msg) => {
   if (!birdbox || birdbox.readyState !== WebSocket.OPEN) {
-    logger.warn("Attempted to send command but Birdbox is not connected");
+    logger.warn("Birdbox not connected");
     return;
   }
 
   try {
-    logger.info(`Command sent - type: ${cmd.type}, action: ${cmd.action}`);
-    birdbox.send(JSON.stringify(cmd));
+    birdbox.send(JSON.stringify(msg));
+    logger.info(`Message sent [${msg.type}, ${msg.action}]`);
   } catch (err) {
-    logger.error(`Failed to send command: ${err.message}`);
+    logger.error(`Failed to send message: ${err.message}`);
   }
 };
+
+const broadcastMessage = (msg) => {};
 
 // -------------------------
 // WebSocket Server
 // -------------------------
+let birdbox = null;
+let clients = [];
+
+const videoState = JSON.parse(
+  fs.readFileSync(path.join(__dirname, "data", "videos.json"), "utf8")
+);
+
 const wss = new WebSocket.Server({ port: process.env.WS_SERVER_PORT });
 
 wss.on("connection", (ws) => {
-  if (birdbox) {
-    logger.warn("Birdbox attempted duplicate connection; rejecting");
-    ws.close();
-    return;
-  }
+  logger.info("Incoming client connection");
 
-  logger.info("Birdbox connected");
-  birdbox = ws;
+  ws.on("message", (msg) => {
+    msg = JSON.parse(msg);
+
+    // Incoming ws connection; valid client types are
+    // birdbox or browser. There can only be 1 birdbox
+    // connection and 1 or more browser connections
+    if (msg.type === "connection") {
+      switch (msg.clientType) {
+        case "birdbox":
+          if (birdbox) {
+            ws.close();
+            logger.warn("Rejected duplicate birdbox connection");
+            return;
+          }
+          birdbox = ws;
+          logger.info("Birdbox connected");
+          break;
+        case "browser":
+          clients.push(ws);
+          logger.info(`Client connected (clients: ${clients.length})`);
+          break;
+        default:
+          logger.warn("Invalid connection attempt");
+      }
+    }
+
+    // recieved command from browser client
+    if (msg.type === "command" && msg.clientType === "browser") {
+    }
+
+    // recieved command from birdbox
+    if (msg.type === "command" && msg.clientType === "birdbox") {
+      switch (msg.action) {
+        case "notify-start":
+          clients.forEach((client) => {
+            if (client !== ws) {
+              console.log(ws);
+              console.log(msg);
+              // client.send(JSON.stringify({
+
+              // }));
+            }
+          });
+          break;
+        case "notify-stop":
+          break;
+        default:
+          logger.warn("Invalid message from birdbox");
+      }
+    }
+  });
 
   ws.on("error", (err) => {
     logger.error(`WebSocket error: ${err.message}`);
   });
 
   ws.on("close", () => {
-    logger.info("Birdbox disconnected");
-    if (birdbox === ws) birdbox = null;
+    if (birdbox === ws) {
+      birdbox = null;
+      logger.info("Birdbox disconnected");
+    } else {
+      clients = clients.filter((c) => c !== ws);
+      logger.info(`Client disconnected (clients: ${clients.length})`);
+    }
   });
 });
 
 // -------------------------
-// Routes
+// Express Routes
 // -------------------------
 app.get("/api/videos", (req, res) => {
   try {
-    const videos = fs.readFileSync(
-      path.join(__dirname, "data", "videos.json"),
-      "utf8"
-    );
-    res.json(JSON.parse(videos));
+    // send the current video state to new browser client
+    res.send(videoState);
   } catch (err) {
-    logger.error(`Failed to read videos.json: ${err.message}`);
+    logger.error(`Failed to send video data: ${err.message}`);
     res.sendStatus(500);
   }
 });
 
+// TODO replace with ws message
 app.post("/api/command", (req, res) => {
-  sendCommand(req.body);
+  sendBirdboxMessage(req.body);
   res.sendStatus(204);
 });
+
+app.get("/api/config", (req, res) => {
+  res.json({
+    SERVER_ADDRESS: process.env.SERVER_ADDRESS,
+  });
+});
+
+const findVideo = (id) => {
+  // for now, the filename is the video id
+  return videoState.filter((v) => (v.id = id));
+};
 
 // -------------------------
 // Start Server
