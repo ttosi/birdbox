@@ -65,10 +65,18 @@ const connect = () => {
                 ];
 
           mpvProcess = spawn("mpv", args);
-          logger.info(`Starting video: ${filepath}`);
+          logger.info(`Starting video: ${msg.id}`);
 
           mpvProcess.on("exit", (code, signal) => {
-            mpvProcess = null;
+            ws.send(
+              JSON.stringify({
+                id: msg.id,
+                type: "command",
+                action: "stop",
+                clientType: "birdbox",
+              })
+            );
+
             logger.info(`mpv exited (code=${code}, signal=${signal})`);
           });
 
@@ -84,7 +92,7 @@ const connect = () => {
         if (mpvProcess) {
           try {
             mpvProcess.kill();
-            logger.info("Video stopped");
+            logger.info(`Stopping video: ${msg.id}`);
           } catch (err) {
             logger.error(`Failed to stop video: ${err.message}`);
           }

@@ -57,6 +57,22 @@ wss.on("connection", (ws) => {
     }
 
     // -------------------------
+    // Handle Birdbox Commands
+    // -------------------------
+    if (msg.type === "command" && msg.clientType === "birdbox") {
+      videoState.find((v) => v.id === msg.id).isPlaying = false;
+      clients.forEach((c) => {
+        c.send(
+          JSON.stringify({
+            id: msg.id,
+            type: "notify",
+            action: msg.action,
+          })
+        );
+      });
+    }
+
+    // -------------------------
     // Handle Broswer Commands
     // -------------------------
     if (msg.type === "command" && msg.clientType === "browser") {

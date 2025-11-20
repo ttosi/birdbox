@@ -57,6 +57,10 @@
     </div>
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
     <script>
+      // TODO set up ws ping/pong to detect connection lost to
+      //      server. When lost, display overlay "Connection lost
+      //      to server [Refresh] to reconnect"
+
       const { createApp } = Vue;
 
       createApp({
@@ -69,10 +73,10 @@
         },
         methods: {
           connect() {
-            // open connection to ws server and
+            // connect to server
             this.clientId = crypto.randomUUID();
             this.ws.onopen = () => {
-              // register as a browser
+              // register as browser
               this.ws.send(
                 JSON.stringify({
                   type: "connection",
@@ -81,23 +85,20 @@
                 })
               );
 
-              // receive ws messages from server
+              // receive messages from server
               this.ws.onmessage = (event) => {
                 const msg = JSON.parse(event.data);
-                console.log(msg);
                 this.videos.find((v) => v.id === msg.id).isPlaying =
                   msg.action === "start";
               };
             };
           },
           start(video) {
-            // if video playing
-            const playing = this.videos.find((v) => v.isPlaying);
-            if (playing) {
-              this.stop(playing); // send ws stop message
+            // stop if a video is currently playing
+            const currentlyPlaying = this.videos.find((v) => v.isPlaying);
+            if (currentlyPlaying) {
+              this.stop(currentlyPlaying);
             }
-
-            // playVideo(video); // change to ws call
 
             this.sendMessage({
               id: video.id,
@@ -108,10 +109,6 @@
             video.isPlaying = true;
           },
           stop(video) {
-            // stopVideo(video); // change to ws call (sendMessage(video))
-
-            // send stop command to server so it can
-            // update all the client's video state
             this.sendMessage({
               id: video.id,
               type: "command",
@@ -131,66 +128,30 @@
           },
         },
         async mounted() {
-          // get ws config from server (REST)
+          // get ws config from server
           // TODO refactor both calls as await
-          fetch("/api/config")
-            .then((res) => res.json())
-            .then(async (config) => {
-              this.ws = new WebSocket(config.SERVER_ADDRESS);
-              this.connect();
 
-              // get list of videos
-              const res = await fetch("/api/videos");
-              this.videos = await res.json();
-            });
+          const resConfig = await fetch("/api/config");
+          const config = await resConfig.json();
+
+          this.ws = new WebSocket(config.SERVER_ADDRESS);
+          this.connect();
+
+          const resVideos = await fetch("/api/videos");
+          this.videos = await resVideos.json();
+
+          // fetch("/api/config")
+          //   .then((res) => res.json())
+          //   .then(async (config) => {
+          //     this.ws = new WebSocket(config.SERVER_ADDRESS);
+          //     this.connect();
+
+          //     // get list of videos
+          //     const res = await fetch("/api/videos");
+          //     this.videos = await res.json();
+          //   });
         },
       }).mount("#app");
-
-      // move to vue object, change to ws
-      const playVideo = async (msg) => {
-        await fetch("/api/command", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            id: msg.id,
-            type: "command",
-            action: "start",
-          }),
-        });
-      };
-
-      // move to vue object, change to ws
-      const stopVideo = async (msg) => {
-        console.log("stop", msg);
-        await fetch("/api/command", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            id: msg.id,
-            type: "command",
-            action: "stop",
-          }),
-        });
-      };
-
-      const post = () => {};
-
-      const formatSeconds = (seconds) => {
-        const hrs = Math.floor(seconds / 3600)
-          .toString()
-          .padStart(2, "0");
-        const mins = Math.floor((seconds % 3600) / 60)
-          .toString()
-          .padStart(2, "0");
-        const secs = Math.floor(seconds % 60)
-          .toString()
-          .padStart(2, "0");
-        return `${hrs}:${mins}:${secs}`;
-      };
     </script>
   </body>
 </html>

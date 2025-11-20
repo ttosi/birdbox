@@ -58,5 +58,11 @@
     "name": "A Fly on the Wall",
     "duration": "00:10:00",
     "isPlaying": false
+  },
+  {
+    "id": "one_minute",
+    "name": "Test Video - 1 Minute",
+    "duration": "00:01:00",
+    "isPlaying": false
   }
 ]
