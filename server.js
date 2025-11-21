@@ -15,6 +15,11 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use(express.json());
 app.use(cookieParser());
 
+const requireApiKey = (req, res, next) => {
+  if (req.cookies.apiKey !== process.env.API_KEY) return res.sendStatus(401);
+  next();
+};
+
 // -------------------------
 // WebSocket Server
 // -------------------------
@@ -113,17 +118,14 @@ wss.on("connection", (ws) => {
       logger.info(`Client disconnected (client count: ${clients.length})`);
     }
   });
+
+  wss.on("error", (err) => logger.error("WS server error: " + err.message));
 });
 
 // -------------------------
 // Routes
 // -------------------------
-app.get("/api/videos", (req, res) => {
-  if (req.cookies.apiKey !== process.env.API_KEY) {
-    res.sendStatus(401);
-    return;
-  }
-
+app.get("/api/videos", requireApiKey, (req, res) => {
   try {
     res.send(videoState);
   } catch (err) {
@@ -132,12 +134,7 @@ app.get("/api/videos", (req, res) => {
   }
 });
 
-app.get("/api/config", (req, res) => {
-  if (req.cookies.apiKey !== process.env.API_KEY) {
-    res.sendStatus(401);
-    return;
-  }
-
+app.get("/api/config", requireApiKey, (req, res) => {
   res.json({
     SERVER_ADDRESS: process.env.SERVER_ADDRESS,
   });
@@ -145,9 +142,16 @@ app.get("/api/config", (req, res) => {
 
 app.post("/api/auth", (req, res) => {
   if (req.body.apiKey === process.env.API_KEY) {
-    res.send({ key: process.env.API_KEY });
+    res.cookie("apiKey", process.env.API_KEY, {
+      // httpOnly: true,
+      sameSite: "strict",
+      secure: true,
+      maxAge: 31536000000, // 1 year
+    });
+    res.send(true);
     return;
   }
+
   res.send(false);
 });
 

@@ -106,18 +106,18 @@
                   clientId: this.clientId,
                 })
               );
+            };
 
-              // receive messages from server
-              this.ws.onmessage = (event) => {
-                const msg = JSON.parse(event.data);
-                this.videos.find((v) => v.id === msg.id).isPlaying =
-                  msg.action === "start";
-              };
+            // receive messages from server
+            this.ws.onmessage = (event) => {
+              const msg = JSON.parse(event.data);
+              this.videos.find((v) => v.id === msg.id).isPlaying =
+                msg.action === "start";
+            };
 
-              this.ws.onclose = (ev) => {
-                const dialog = document.getElementById("socketDisconnected");
-                dialog.setAttribute("open", "");
-              };
+            this.ws.onclose = (ev) => {
+              const dialog = document.getElementById("socketDisconnected");
+              dialog.setAttribute("open", "");
             };
           },
           start(video) {
@@ -160,19 +160,12 @@
               body: JSON.stringify({ apiKey: this.apiKey }),
             });
 
-            const apiKey = await res.json();
+            const authenticated = await res.json();
 
             // api key is valid
-            if (apiKey) {
-              Cookies.set("apiKey", apiKey.key, {
-                secure: true,
-                sameSite: "strict",
-                expires: 365,
-              });
-
+            if (authenticated) {
               this.load();
               this.isAuthenticated = true;
-
               return;
             }
 
@@ -189,14 +182,6 @@
           },
         },
         async mounted() {
-          // const res = await fetch("/api/auth", {
-          //   method: "POST",
-          //   headers: { "Content-Type": "application/json" },
-          //   body: JSON.stringify({ apiKey: Cookies.get("apiKey") }),
-          // });
-
-          // const apiKey = await res.json();
-
           if (Cookies.get("apiKey")) {
             this.load();
             this.isAuthenticated = true;
