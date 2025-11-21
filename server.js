@@ -26,6 +26,20 @@ const videoState = JSON.parse(
 
 const wss = new WebSocket.Server({ port: process.env.WS_SERVER_PORT });
 
+const broadcastNotification = (msg, senderId) => {
+  clients.forEach((c) => {
+    if (c.clientId !== senderId) {
+      c.send(
+        JSON.stringify({
+          id: msg.id,
+          type: "notify",
+          action: msg.action,
+        })
+      );
+    }
+  });
+};
+
 wss.on("connection", (ws) => {
   logger.info("Incoming client connection");
 
@@ -57,40 +71,25 @@ wss.on("connection", (ws) => {
     }
 
     // -------------------------
-    // Handle Birdbox Commands
+    // Handle Birdbox Messages
     // -------------------------
     if (msg.type === "command" && msg.clientType === "birdbox") {
-      videoState.find((v) => v.id === msg.id).isPlaying = false;
-      clients.forEach((c) => {
-        c.send(
-          JSON.stringify({
-            id: msg.id,
-            type: "notify",
-            action: msg.action,
-          })
-        );
-      });
+      videoState.find((v) => v.id === msg.id).isPlaying =
+        msg.action === "start";
+
+      // notify all clients of state change
+      broadcastNotification(msg, null);
     }
 
     // -------------------------
-    // Handle Broswer Commands
+    // Handle Browser Messages
     // -------------------------
     if (msg.type === "command" && msg.clientType === "browser") {
       // send command to birdbox
       birdbox.send(JSON.stringify(msg));
 
-      // notify all clients of state change
-      clients.forEach((c) => {
-        if (c.clientId !== ws.clientId) {
-          c.send(
-            JSON.stringify({
-              id: msg.id,
-              type: "notify",
-              action: msg.action,
-            })
-          );
-        }
-      });
+      // notify clients of state change except sender
+      broadcastNotification(msg, ws.clientId);
 
       // update local videoState
       videoState.find((v) => v.id === msg.id).isPlaying =
@@ -103,7 +102,7 @@ wss.on("connection", (ws) => {
   });
 
   ws.on("close", () => {
-    if (ws === birdbox) {
+    if (ws.clientId === birdbox.clientId) {
       birdbox = undefined;
       logger.info("Birdbox disconnected");
     } else {

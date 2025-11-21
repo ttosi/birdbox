@@ -11,6 +11,19 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
+    <dialog id="socketDisconnected">
+      <article>
+        <header style="text-align: center">
+          <p>
+            <strong>😾 Connection Lost 😿</strong>
+          </p>
+        </header>
+        <p>
+          The connection to the birdbox server was lost. Please, refresh the
+          page to attempt to reconnect.
+        </p>
+      </article>
+    </dialog>
     <h1>Birdbox</h1>
     <div id="app">
       <div id="videos" v-for="video in videos" :key="video.name">
@@ -91,6 +104,11 @@
                 this.videos.find((v) => v.id === msg.id).isPlaying =
                   msg.action === "start";
               };
+
+              this.ws.onclose = (ev) => {
+                const dialog = document.getElementById("socketDisconnected");
+                dialog.setAttribute("open", "");
+              };
             };
           },
           start(video) {
@@ -129,8 +147,6 @@
         },
         async mounted() {
           // get ws config from server
-          // TODO refactor both calls as await
-
           const resConfig = await fetch("/api/config");
           const config = await resConfig.json();
 
@@ -139,17 +155,6 @@
 
           const resVideos = await fetch("/api/videos");
           this.videos = await resVideos.json();
-
-          // fetch("/api/config")
-          //   .then((res) => res.json())
-          //   .then(async (config) => {
-          //     this.ws = new WebSocket(config.SERVER_ADDRESS);
-          //     this.connect();
-
-          //     // get list of videos
-          //     const res = await fetch("/api/videos");
-          //     this.videos = await res.json();
-          //   });
         },
       }).mount("#app");
     </script>
