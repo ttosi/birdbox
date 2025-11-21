@@ -26,8 +26,16 @@
     </dialog>
     <h1>Birdbox</h1>
     <div id="app">
-      <div id="videos" v-for="video in videos" :key="video.name">
-        <article>
+      <!-- not authenticated -->
+      <div v-if="!isAuthenticated">
+        <input v-model="apiKey" type="text" placeholder="ENTER API KEY" />
+        <input type="button" value="Submit" @click="authenticate" />
+      </div>
+      <!-- authenticated -->
+      <div v-else id="videos" v-for="video in videos" :key="video.name">
+        <article
+          :style="{ border: video.isPlaying ? '2px solid lightgreen': 'none'}"
+          style="">
           <header><strong>{{ video.name }}</strong></header>
           <div v-if="!video.isPlaying" @click="start(video)">
             <div class="thumbnail-wrapper">
@@ -52,16 +60,15 @@
             </div>
           </div>
           <footer>
-            <div class="row">
+            <div>
               <div v-if="!video.isPlaying">
                 <small>Duration {{ video.duration }}</small>
               </div>
-              <!--fix this only one v-if-->
-              <div v-if="video.isPlaying">
-                <small>Playing</small>
-              </div>
-              <div v-if="video.isPlaying">
-                <button>View Live Stream</button>
+              <div v-else class="row">
+                <div>Playing</div>
+                <div>
+                  <button>View Live Stream</button>
+                </div>
               </div>
             </div>
           </footer>
@@ -69,25 +76,27 @@
       </div>
     </div>
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-cookie@3.0.5/dist/js.cookie.min.js"></script>
     <script>
-      // TODO set up ws ping/pong to detect connection lost to
-      //      server. When lost, display overlay "Connection lost
-      //      to server [Refresh] to reconnect"
-
       const { createApp } = Vue;
 
       createApp({
         data() {
           return {
+            config: undefined,
             videos: [],
             ws: undefined,
             clientId: undefined,
+            apiKey: undefined,
+            isAuthenticated: false,
           };
         },
         methods: {
           connect() {
             // connect to server
+            this.ws = new WebSocket(this.config.SERVER_ADDRESS);
             this.clientId = crypto.randomUUID();
+
             this.ws.onopen = () => {
               // register as browser
               this.ws.send(
@@ -144,17 +153,54 @@
               })
             );
           },
+          async authenticate() {
+            const res = await fetch("/api/auth", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ apiKey: this.apiKey }),
+            });
+
+            const apiKey = await res.json();
+
+            // api key is valid
+            if (apiKey) {
+              Cookies.set("apiKey", apiKey.key, {
+                secure: true,
+                sameSite: "strict",
+                expires: 365,
+              });
+
+              this.load();
+              this.isAuthenticated = true;
+
+              return;
+            }
+
+            this.apiKey = "";
+          },
+          async load() {
+            const res = await fetch("/api/config");
+            this.config = await res.json();
+
+            this.connect();
+
+            const resVideos = await fetch("/api/videos");
+            this.videos = await resVideos.json();
+          },
         },
         async mounted() {
-          // get ws config from server
-          const resConfig = await fetch("/api/config");
-          const config = await resConfig.json();
+          // const res = await fetch("/api/auth", {
+          //   method: "POST",
+          //   headers: { "Content-Type": "application/json" },
+          //   body: JSON.stringify({ apiKey: Cookies.get("apiKey") }),
+          // });
 
-          this.ws = new WebSocket(config.SERVER_ADDRESS);
-          this.connect();
+          // const apiKey = await res.json();
 
-          const resVideos = await fetch("/api/videos");
-          this.videos = await resVideos.json();
+          if (Cookies.get("apiKey")) {
+            this.load();
+            this.isAuthenticated = true;
+          }
         },
       }).mount("#app");
     </script>

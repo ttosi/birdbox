@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const express = require("express");
 const bodyParser = require("body-parser");
+const cookieParser = require("cookie-parser");
 const WebSocket = require("ws");
 const logger = require("./logger");
 
@@ -11,8 +12,8 @@ const logger = require("./logger");
 // -------------------------
 const app = express();
 app.use(express.static(path.join(__dirname, "public")));
-app.use(bodyParser.json());
 app.use(express.json());
+app.use(cookieParser());
 
 // -------------------------
 // WebSocket Server
@@ -27,17 +28,19 @@ const videoState = JSON.parse(
 const wss = new WebSocket.Server({ port: process.env.WS_SERVER_PORT });
 
 const broadcastNotification = (msg, senderId) => {
-  clients.forEach((c) => {
-    if (c.clientId !== senderId) {
-      c.send(
-        JSON.stringify({
-          id: msg.id,
-          type: "notify",
-          action: msg.action,
-        })
-      );
-    }
-  });
+  clients
+    .filter((c) => c.readyState === WebSocket.OPEN)
+    .forEach((c) => {
+      if (c.clientId !== senderId) {
+        c.send(
+          JSON.stringify({
+            id: msg.id,
+            type: "notify",
+            action: msg.action,
+          })
+        );
+      }
+    });
 };
 
 wss.on("connection", (ws) => {
@@ -116,8 +119,12 @@ wss.on("connection", (ws) => {
 // Routes
 // -------------------------
 app.get("/api/videos", (req, res) => {
+  if (req.cookies.apiKey !== process.env.API_KEY) {
+    res.sendStatus(401);
+    return;
+  }
+
   try {
-    // send the current video state
     res.send(videoState);
   } catch (err) {
     logger.error(`Failed to send video data: ${err.message}`);
@@ -126,9 +133,22 @@ app.get("/api/videos", (req, res) => {
 });
 
 app.get("/api/config", (req, res) => {
+  if (req.cookies.apiKey !== process.env.API_KEY) {
+    res.sendStatus(401);
+    return;
+  }
+
   res.json({
     SERVER_ADDRESS: process.env.SERVER_ADDRESS,
   });
+});
+
+app.post("/api/auth", (req, res) => {
+  if (req.body.apiKey === process.env.API_KEY) {
+    res.send({ key: process.env.API_KEY });
+    return;
+  }
+  res.send(false);
 });
 
 // -------------------------
