@@ -82,11 +82,14 @@ wss.on("connection", (ws) => {
     // Handle Birdbox Messages
     // -------------------------
     if (msg.type === "command" && msg.clientType === "birdbox") {
-      videoState.find((v) => v.id === msg.id).isPlaying =
-        msg.action === "start";
+      if (msg.action === "stream-image") {
+      } else {
+        videoState.find((v) => v.id === msg.id).isPlaying =
+          msg.action === "start";
 
-      // notify all clients of state change
-      broadcastNotification(msg, null);
+        // notify all clients of state change
+        broadcastNotification(msg, null);
+      }
     }
 
     // -------------------------
