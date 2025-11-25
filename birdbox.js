@@ -1,3 +1,4 @@
+// test
 require("dotenv").config({ debug: false });
 const { spawn } = require("child_process");
 const WebSocket = require("ws");
