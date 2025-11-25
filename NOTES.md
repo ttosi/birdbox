@@ -23,7 +23,7 @@ convert -size 800x480 xc:black -fill white -gravity southwest -pointsize 16 -ann
   --height 480 --width 854 --keep-display-aspect 
   -E copy:aac
   
-(cli1) HandBrakeCLI -i LGksZ7v6oNE_00-27-14.mp4 -o LGksZ7v6oNE_00-27-14_cli1.mp4 -e x264 --x264-preset veryfast -q 22 -r 30 --maxHeight 720 --vb 1500 --optimize
+(cli1) HandBrakeCLI -i one_minute.mp4 -o one_minute_opt.mp4 -e x264 --x264-preset veryfast -q 22 -r 30 --maxHeight 720 --vb 1500 --optimize
 
 mkdir -p optimized
 for img in *.jpg *.png; do
@@ -34,3 +34,35 @@ for img in *.jpg *.png; do
     *.png) optipng -o7 "optimized/$img" ;;
   esac
 done
+
+mkdir -p optimized
+for img in *.jpg *.png; do
+  [ -f "$img" ] || continue
+  # strip extension
+  base=$(basename "$img")
+  name="${base%.*}"
+  convert "$img" -resize 330x175^ -gravity center -extent 330x175 "optimized/${name}.webp"
+done
+
+
+          // if (playingTimer) clearTimeout(playingTimer);
+          // playingTimer = setTimeout(() => {
+          //   logger.info("killing mvp process!");
+          //   if (mpvProcess) {
+          //     mpvProcess.kill();
+          //     mpvProcess = null;
+          //     logger.info("Video stopped");
+          //   }
+          // }, 602000);
+		  
+		  Please unblock challenges.cloudflare.com to proceed.
+		  
+ --no-terminal --log-file=/tmp/mpv.log --vo=gpu --hwdec=auto --really-quiet
+ 
+ 
+   // {
+  //   "id": "one_minute",
+  //   "name": "Test Video - 1 Minute",
+  //   "duration": "00:01:00",
+  //   "isPlaying": false
+  // }

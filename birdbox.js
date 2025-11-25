@@ -77,6 +77,8 @@ const connect = () => {
               })
             );
 
+            // TODO stop streaming if enabled
+
             logger.info(`mpv exited (code=${code}, signal=${signal})`);
           });
 
@@ -92,12 +94,16 @@ const connect = () => {
         if (mpvProcess) {
           try {
             mpvProcess.kill();
+            // TODO stop streaming if enabled
             logger.info(`Stopping video: ${msg.id}`);
           } catch (err) {
             logger.error(`Failed to stop video: ${err.message}`);
           }
           mpvProcess = null;
         }
+        break;
+
+      case "stream-start":
         break;
 
       default:

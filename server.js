@@ -2,7 +2,6 @@ require("dotenv").config({ debug: false });
 const fs = require("fs");
 const path = require("path");
 const express = require("express");
-const bodyParser = require("body-parser");
 const cookieParser = require("cookie-parser");
 const WebSocket = require("ws");
 const logger = require("./logger");
@@ -15,22 +14,17 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use(express.json());
 app.use(cookieParser());
 
+let birdbox = undefined;
+let clients = [];
+
 const requireApiKey = (req, res, next) => {
   if (req.cookies.apiKey !== process.env.API_KEY) return res.sendStatus(401);
   next();
 };
 
-// -------------------------
-// WebSocket Server
-// -------------------------
-let birdbox = undefined;
-let clients = [];
-
 const videoState = JSON.parse(
   fs.readFileSync(path.join(__dirname, "data", "videos.json"), "utf8")
 );
-
-const wss = new WebSocket.Server({ port: process.env.WS_SERVER_PORT });
 
 const broadcastNotification = (msg, senderId) => {
   clients
@@ -47,6 +41,21 @@ const broadcastNotification = (msg, senderId) => {
       }
     });
 };
+
+const getVideo = (id) => {
+  const video = videoState.find((v) => v.id === id);
+  if (video) {
+    return video;
+  }
+
+  logger.warn(`Video ${id} not found in video state`);
+  return false;
+};
+
+// -------------------------
+// WebSocket Server
+// -------------------------
+const wss = new WebSocket.Server({ port: process.env.WS_SERVER_PORT });
 
 wss.on("connection", (ws) => {
   logger.info("Incoming client connection");
@@ -82,13 +91,20 @@ wss.on("connection", (ws) => {
     // Handle Birdbox Messages
     // -------------------------
     if (msg.type === "command" && msg.clientType === "birdbox") {
-      if (msg.action === "stream-image") {
-      } else {
-        videoState.find((v) => v.id === msg.id).isPlaying =
-          msg.action === "start";
+      switch (msg.action) {
+        case "start":
+        case "stop":
+          // update local videoState
+          const video = getVideo(msg.id);
+          if (video) {
+            video.isPlaying = msg.action === "start";
+          }
 
-        // notify all clients of state change
-        broadcastNotification(msg, null);
+          // notify all clients of state change
+          broadcastNotification(msg, null);
+          break;
+        default:
+          logger.warn(`Invalid command from birdbox: ${JSON.stringify(msg)}`);
       }
     }
 
@@ -96,15 +112,41 @@ wss.on("connection", (ws) => {
     // Handle Browser Messages
     // -------------------------
     if (msg.type === "command" && msg.clientType === "browser") {
-      // send command to birdbox
-      birdbox.send(JSON.stringify(msg));
+      switch (msg.action) {
+        case "start":
+        case "stop":
+          // send command to birdbox
+          birdbox.send(JSON.stringify(msg));
 
-      // notify clients of state change except sender
-      broadcastNotification(msg, ws.clientId);
+          // notify clients of state change except sender
+          broadcastNotification(msg, ws.clientId);
 
-      // update local videoState
-      videoState.find((v) => v.id === msg.id).isPlaying =
-        msg.action === "start";
+          // update local videoState
+          const video = getVideo(msg.id);
+          if (video) {
+            video.isPlaying = msg.action === "start";
+          }
+          break;
+        case "stream-start":
+          // update client's state to isStreaming = true
+
+          // send message to birdbox to enable streaming interval if
+          //  not already streaming
+          birdbox.send(
+            JSON.stringify({
+              type: "command",
+              action: "stream-start",
+            })
+          );
+          break;
+        case "stream-stop":
+          // update client's state to isStreaming = false
+          // check is any client is currently streaming
+          //  if none, send message to birdbox to stop streaming
+          break;
+        default:
+          logger.warn(`Invalid command from browser: ${JSON.stringify(msg)}`);
+      }
     }
   });
 
