@@ -1,4 +1,3 @@
-// test
 require("dotenv").config({ debug: false });
 const { spawn } = require("child_process");
 const WebSocket = require("ws");
@@ -22,11 +21,10 @@ const connect = () => {
       })
     );
 
-    // clear reconnection timer once connection
-    // is reestablished
+    // clear reconnection timer once connection reestablished
     if (reconnectTimer) {
       clearTimeout(reconnectTimer);
-      reconnectTimer = null;
+      reconnectTimer = undefined;
     }
   });
 
@@ -68,6 +66,7 @@ const connect = () => {
           mpvProcess = spawn("mpv", args);
           logger.info(`Starting video: ${msg.id}`);
 
+          // after video has run it's natural length, send stop command
           mpvProcess.on("exit", (code, signal) => {
             ws.send(
               JSON.stringify({
@@ -114,7 +113,12 @@ const connect = () => {
 
   ws.on("close", () => {
     logger.warn("Attempting to reconnect, retrying in 5s...");
-    scheduleReconnect();
+    // scheduleReconnect();
+    if (!reconnectTimer) {
+      reconnectTimer = setInterval(() => {
+        connect();
+      }, 5000);
+    }
   });
 
   ws.on("error", (err) => {
@@ -125,12 +129,6 @@ const connect = () => {
     }
     ws.close();
   });
-};
-
-// start interval for connection reattempts
-const scheduleReconnect = () => {
-  if (reconnectTimer) return;
-  reconnectTimer = setTimeout(connect, 5000);
 };
 
 connect();
