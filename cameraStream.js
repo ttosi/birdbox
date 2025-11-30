@@ -1,24 +1,19 @@
-// cameraStream.js
 const { spawn } = require("child_process");
+const logger = require("./logger");
 
-function startStream(options = {}) {
+const startStream = (options = {}) => {
+  logger.info("Starting stream");
   const { width = 640, height = 480, framerate = 10, quality = 40 } = options;
 
+  // prettier-ignore
   const args = [
-    "--codec",
-    "mjpeg",
-    "--timeout",
-    "0", // run indefinitely
-    "--width",
-    width.toString(),
-    "--height",
-    height.toString(),
-    "--framerate",
-    framerate.toString(),
-    "--quality",
-    quality.toString(),
-    "-o",
-    "-", // output to stdout
+    "--codec", "mjpeg",
+    "--timeout", "0", 
+    "--width", String(width),
+    "--height", String(height),
+    "--framerate", String(framerate),
+    "--quality", String(quality),
+    "-o", "-",
   ];
 
   const child = spawn("rpicam-vid", args);
@@ -42,21 +37,27 @@ function startStream(options = {}) {
       ) {
         const frame = buffer.slice(start, end + 2);
         buffer = buffer.slice(end + 2);
-
         callback(frame);
       }
     });
 
     child.stderr.on("data", (data) => {
-      console.error("camera:", data.toString());
+      logger.error("camera:", data.toString());
     });
 
     child.on("close", (code) => {
-      console.error("rpicam-vid exited", code);
+      console.warn("rpicam-vid exited", code);
     });
   }
 
   return { onFrame, process: child };
-}
+};
 
-module.exports = { startStream };
+const stopStream = () => {
+  logger.info("Stopping stream");
+  if (!child.killed) {
+    child.kill("SIGINT");
+  }
+};
+
+module.exports = { startStream, stopStream };
