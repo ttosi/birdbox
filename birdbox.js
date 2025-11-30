@@ -15,10 +15,13 @@ const cam = startStream({
 });
 
 cam.onFrame((jpegBuffer) => {
-  // Convert to base64 if needed
   const base64 = jpegBuffer.toString("base64");
   console.log("FRAME:", base64);
 });
+
+setTimeout(() => {
+  stopStream();
+}, 5000);
 
 const connect = () => {
   const ws = new WebSocket(process.env.SERVER_ADDRESS);
@@ -127,7 +130,6 @@ const connect = () => {
 
   ws.on("close", () => {
     logger.warn("Attempting to reconnect, retrying in 5s...");
-    // scheduleReconnect();
     if (!reconnectTimer) {
       reconnectTimer = setInterval(() => {
         connect();
@@ -145,4 +147,4 @@ const connect = () => {
   });
 };
 
-connect();
+// connect();
