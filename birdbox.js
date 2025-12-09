@@ -7,21 +7,21 @@ const { startStream, stopStream } = require("./cameraStream");
 let mpvProcess = undefined;
 let reconnectTimer = undefined;
 
-const cam = startStream({
-  width: 640,
-  height: 480,
-  framerate: 10,
-  quality: 40,
-});
+// const cam = startStream({
+//   width: 640,
+//   height: 480,
+//   framerate: 10,
+//   quality: 40,
+// });
 
-cam.onFrame((jpegBuffer) => {
-  const base64 = jpegBuffer.toString("base64");
-  console.log("FRAME:", base64);
-});
+// cam.onFrame((jpegBuffer) => {
+//   const base64 = jpegBuffer.toString("base64");
+//   console.log("FRAME:", base64);
+// });
 
-setTimeout(() => {
-  stopStream();
-}, 5000);
+// setTimeout(() => {
+//   stopStream();
+// }, 5000);
 
 const connect = () => {
   const ws = new WebSocket(process.env.SERVER_ADDRESS);

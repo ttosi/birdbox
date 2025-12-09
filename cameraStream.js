@@ -14,6 +14,7 @@ const startStream = (options = {}) => {
     "--height", height.toString(),
     "--framerate", framerate.toString(),
     "--quality", quality.toString(),
+    "--nopreview",
     "-o", "-",
   ];
 
