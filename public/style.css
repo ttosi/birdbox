@@ -64,3 +64,12 @@ button {
   outline: none;
   box-shadow: none;
 }
+
+.spinner-large {
+  font-size: 6.8rem;
+  margin: 0;
+  opacity: 0.5;
+  width: 100%;
+  position: absolute;
+  top: 0;
+}

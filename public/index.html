@@ -41,6 +41,7 @@
             <div v-if="!video.isPlaying" @click="start(video)">
               <div class="thumbnail-wrapper">
                 <img :src="`/thumbnails/${video.id}.png`" />
+                <!-- <article class="spinner-large" aria-busy="true"></article> -->
                 <div class="control-icon">
                   <svg height="32px" viewBox="0 0 512 512" width="32px">
                     <path

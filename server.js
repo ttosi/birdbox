@@ -155,7 +155,8 @@ wss.on("connection", (ws) => {
   });
 
   ws.on("close", () => {
-    if (ws.clientId === birdbox.clientId) {
+    // if (ws.clientId === birdbox.clientId) {
+    if (ws === birdbox) {
       birdbox = undefined;
       logger.info("Birdbox disconnected");
     } else {
